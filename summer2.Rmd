@@ -1,0 +1,98 @@
+---
+title: "Summer2"
+author: "Brenden Bready"
+date: "6/7/2020"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(gganimate)
+theme_set(theme_bw())
+library(magick)
+library(gifski)
+library(av)
+library(png)
+library(stringr)
+library(tidyr)
+library(gridExtra)
+```
+
+```{r}
+playlist <- read_csv("data/PlayList.csv")
+injury <- read_csv("data/InjuryRecord.csv") 
+```
+
+```{r}
+track <- read_csv("data/PlayerTrackData.csv") %>%
+  filter(., PlayKey == "36557-1-70")
+```
+ | PlayKey == "38228-1-4"
+
+```{r}
+when_injured <- right_join(playlist, injury, by = c("PlayKey", "GameID", "PlayerKey"))
+```
+
+
+
+
+
+```{r}
+position <- track %>%
+  fill(event, .direction = "down") %>%
+  ggplot(., aes(x = x, y = y)) +
+  geom_point() +
+  geom_text(aes(label = event))  +
+  geom_vline(xintercept = c(-10,0,25,50,75,100,110)) +
+  geom_hline(yintercept = c(-53, -6.66, 6.66, 53)) +
+  scale_x_continuous(breaks = c(-10,0,25,50,75,100,110), labels = c("end", "0", "25", "50", "25", "G", "end")) +
+  scale_y_continuous(breaks = c(-53, -6.66, 6.66, 53), labels = c("Side", "Hash", "Hash", "Side")) +
+  theme(panel.background = element_rect(fill = "lightgreen", color = "lightgreen")) 
+position
+```
+
+
+```{r}
+position2 <- position + transition_time(time = time)
+animate(position2)
+anim_save("position2.gif")
+```
+
+
+```{r}
+speed <- track %>%
+  ggplot(., aes(x= time, y = s)) + 
+  geom_point() + 
+  theme(panel.background = element_rect(fill = "lightgreen", color = "lightgreen")) + 
+  labs(x = "Time(seconds)", y = "Speed(yards per second)")
+```
+
+
+```{r}
+speed2 <- speed + transition_time(time = time)
+animate(speed2)
+anim_save("speed2.gif")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

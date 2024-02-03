@@ -1,0 +1,314 @@
+---
+title: "summer3"
+author: "Brenden Bready"
+date: "6/22/2020"
+output: html_document
+---
+
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(stringr)
+library(tidyr)
+theme_set(theme_bw())
+library(lme4)
+library(GGally)
+```
+
+```{r}
+playlist <- read_csv("data/PlayList.csv") %>%
+  mutate(Temperature = ifelse(Temperature == "-999", NA, Temperature))
+injury <- read_csv("data/InjuryRecord.csv") 
+track <- read_csv("data/PlayerTrackData.csv") %>%
+  filter(., str_detect(PlayKey, ("39873|46074|36557|46646|43532|41145|46014|44860|44806|45962|46331|36621|44492|43505|41094|40474|39656|46587|46119|38364|45966|35611|44434|44489|44511|26624|27363|30068|30953|31266|32103|34214|34230|34243|34259|35577|35617|35624|36554|36555|36579|36630|36643|36656|36672|36757|36803|36877|37188|38213|38252|38274|38281|38325|39017|39038|39583|39650|39654|39664")) == TRUE)
+```
+
+
+
+playlist %>%
+  filter(injury == "0") %>%
+  distinct(PlayerKey)
+```{r}
+playlist %>%
+  filter(injury == "0") %>%
+  distinct(PlayerKey)
+```
+
+
+
+```{r}
+playlist <- playlist %>%
+  mutate(., Weather = str_replace_all(Weather, "(Mostly [Cc]loudy)|(Partly [Cc]loudy)|(Cloudy and cold)|(Cloudy and Cool)|(Cloudy, fog started developing in 2nd quarter)|(Party Cloudy)|(Hazy)|(Overcast)|(Clear to Cloudy)|(Cloudy with periods of rain, thunder possible. Winds shifting to WNW, 10-20 mph.)|(cloudy)|(Coudy)|(Cloudy, chance of rain)|(Mostly Cloudy)|(Sun & clouds)|(Partly Clouidy)", "Cloudy"), Weather = str_replace_all(Weather, "(Clear and [Ww]arm)|(Clear and Cool)|(Clear and [Cc]old)|(Clear Skies)|(Partly clear)|(Clear Skies)", "Clear"), Weather = str_replace_all(Weather, "(Sunny and [Ww]arm)|(Sunny and [Cc]old)|(Partly [Ss]unny)|(Mostly [Ss]unny)|(Clear and [Ss]unny)|(Sunny, Windy)|(Sunny Skies)" , "Sunny"))
+playlist <- playlist %>%
+  mutate(., Weather = str_replace_all(Weather, "Rain Chance 40%|Showers", "Rain"), Weather = str_replace_na(Weather, "Indoor"), Weather = str_replace_all(Weather, "Fair|Clear to Cloudy|Clear skies", "Clear"), Weather = str_replace_all(Weather, "Sunny and clear|Sunny Skies|Heat Index 95|Sunny, highs to upper 80s", "Sunny"))
+playlist <- playlist %>%
+  mutate(., Weather = str_replace_all(Weather, "Indoors|N[/]A Indoor|Controlled Climate", "Indoor"), Weather = str_replace_all(Weather, "Scattered Rain|Cloudy, 50% change of rain|Light Rain|Rainy|Rain shower|Cloudy, Rain|30% Chance of Rain|10% Chance of Rain", "Rain"), Weather = str_replace_all(Weather, "Mostly Cloudy|Rain likely, temps in low 40s.", "Cloudy"), Weather = str_replace_all(Weather, "Heavy lake effect snow|Cloudy, light snow accumulating 1-3", "Snow"), Weather = str_replace_all(Weather, "Cold|Clear", "Sunny")) 
+playlist <- playlist %>%
+  mutate(., Weather = str_replace_all(Weather, "N/A [(]Indoor[)]", "Indoor"), Weather = str_replace_all(Weather, "Snow[[:punct:]]", "Snow"))
+playlist <- playlist %>%
+  mutate(., StadiumType = str_replace_all(StadiumType, "(Oudoor)|(Outdoors)|Open|Ourdoor|Outdor|Outside|Cloudy|Outddors|Heinz Field", "Outdoor"), StadiumType = str_replace_all(StadiumType, "Indoors|Closed Dome|Dome|Bowl", "Indoor"), StadiumType = str_replace_all(StadiumType, "Retr. Roof-Closed|Outdoor Retr Roof-Outdoor|Retractable Roof|Retr. Roof - Closed|Retr. Roof-Outdoor|Indoor, Outdoor Roof|Indoord, open|Retr. Roof - Outdoor|Retr. Roof Closed|Indoord, Outdoor|Indoor, closed|Indoor, Roof Closed|Indoord, closed|Indoord", "Retractable"))
+```
+
+
+
+```{r}
+injury <- injury %>%
+  mutate(Days_Missed = ifelse(DM_M42 == "1", "42+", ifelse(DM_M28 == "1", "28-41", ifelse(DM_M7 == "1", "7-27", ifelse(DM_M1 == "1", "1-6", "<1")))), injury = 1) %>%
+  select(PlayerKey, GameID, PlayKey, BodyPart, Surface, Days_Missed, injury)
+```
+
+
+
+```{r}
+playlist <- left_join(playlist, injury, by = c("PlayerKey")) %>%
+  replace_na(., list(injury = 0)) %>%
+  rename(., PlayKey = PlayKey.x, GameID = GameID.x) %>%
+  select(., -c(PlayKey.y, GameID.y))
+```
+
+
+
+```{r}
+firstx <- track %>%
+  group_by(., PlayKey) %>%
+  slice(., 1) %>%
+  select(x) %>%
+  rename(., firstx = x)
+firsty <- track %>%
+  group_by(., PlayKey) %>%
+  slice(., 1) %>%
+  select(y) %>%
+  rename(., firsty = y)
+lastx = track %>%
+  group_by(., PlayKey) %>%
+  arrange(desc(time)) %>%
+  slice(., 1) %>%
+  select(x) %>%
+  rename(., lastx = x)
+lasty = track %>%
+  group_by(., PlayKey) %>%
+  arrange(desc(time)) %>%
+  slice(., 1) %>%
+  select(y) %>%
+  rename(., lasty = y)
+track <- track %>%
+  group_by(., PlayKey) %>%
+  mutate(., total_dis = sum(dis))
+track <- right_join(track, firstx, by = c("PlayKey"))
+track <- right_join(track, firsty, by = c("PlayKey"))
+track <- right_join(track, lastx, by = c("PlayKey"))
+track <- right_join(track, lasty, by = c("PlayKey"))
+track <- track %>%
+  mutate(., euc_dist = sqrt((firstx-lastx)^2 +(firsty-lasty)^2 ))
+track <- track %>%
+  mutate(., zigzag_prop = total_dis/euc_dist) %>%
+  select(., -c(firstx,firsty,lastx,lasty))
+```
+
+
+
+
+```{r}
+track <- inner_join(track, playlist, by = c("PlayKey"))
+```
+
+
+
+
+```{r}
+track <- track %>%
+  mutate(., o = ifelse(PlayerDay < 200, ifelse(o > 270, abs(270-o), o+90), o))
+track <- track %>%
+  mutate(., dir1 = ifelse(abs(dir-o) > 180, 360-abs(dir-o), abs(dir-o)), movement = ifelse(dir1 <75, "Forward", ifelse(dir1 < 105, "Lateral", "Backward"))) %>%
+  select(., -c(dir1))
+```
+
+
+```{r}
+track <- track %>%
+  group_by(PlayKey, movement) %>%
+  mutate(., count = ifelse(movement == "Lateral", n(), NA))
+track <- track %>%
+  group_by(PlayKey) %>%
+  fill(count, .direction = "updown") %>%
+  mutate(., percent_lateral = (count/n())*100) %>%
+  select(., -count)
+```
+
+```{r}
+track <- track %>%
+  distinct(GameID, .keep_all = TRUE) %>%
+  select(-c(time, event, x, y, dir, dis, o, s, movement, total_dis, euc_dist))
+```
+
+
+```{r}
+track <- track %>%
+  group_by(PlayerKey, Weather) %>%
+  mutate(count = ifelse(str_detect(Weather, "Rain|Snow") == T, n(), NA))
+track <- track %>%
+  group_by(PlayerKey) %>%
+  fill(count, .direction = "updown") %>%
+  mutate(., percent_wet = (count/n())*100) %>%
+  select(., -count)
+```
+
+```{r}
+track <- track %>%
+  group_by(PlayerKey, FieldType) %>%
+  mutate(., count = ifelse(FieldType == "Synthetic", n(), NA))
+track <- track %>%
+  group_by(PlayerKey) %>%
+  fill(count, .direction = "updown") %>%
+  mutate(., percent_syn = (count/n())*100) %>%
+  select(., -count)
+```
+
+```{r}
+track <- track %>%
+  ungroup(PlayKey) %>%
+  group_by(., PlayerKey) %>%
+  mutate(Temperature = mean(Temperature, na.rm = T), percent_lateral = mean(percent_lateral, na.rm = T), zigzag_prop = mean(zigzag_prop, na.rm = T), percent_wet = mean(percent_wet, na.rm = T), percent_syn = mean(percent_syn, na.rm = T))
+```
+
+```{r}
+track <- track %>%
+  distinct(GameID, .keep_all = T)
+```
+
+```{r}
+track <- track %>%
+  group_by(PlayerKey) %>%
+  mutate(rest = ifelse(PlayerDay - lag(PlayerDay, order_by = PlayerDay) > 100, NA, PlayerDay - lag(PlayerDay, order_by = PlayerDay)), avg_rest = mean(rest, na.rm = T)) %>%
+  select(-rest)
+```
+
+```{r}
+track <- track %>%
+  distinct(PlayerKey, .keep_all = T) %>%
+  select(PlayerKey, injury, percent_syn, Temperature, zigzag_prop, percent_lateral, percent_wet, avg_rest) %>%
+  mutate(., percent_wet = ifelse(is.nan(percent_wet), 0, percent_wet))
+```
+
+```{r}
+track %>%
+  ggcorr(.,)
+```
+
+
+
+mod1 <- glm(injury ~ FieldType + percent_lateral + FieldType*percent_lateral, data = track, family = binomial)
+summary(mod1)
+
+
+mod1 <- glm(injury ~ FieldType + zigzag_prop + percent_lateral + FieldType*zigzag_prop + FieldType*percent_lateral + zigzag_prop*percent_lateral + FieldType*percent_lateral*zigzag_prop, data = track, family = binomial)
+summary(mod1)
+
+
+
+```{r}
+mod1 <- glm(injury ~ percent_wet, data = track, family = binomial)
+summary(mod1)
+```
+
+
+```{r}
+track2 <- round(track, 1)
+```
+
+```{r}
+track1 <- round(track)
+```
+
+
+
+```{r}
+track1 %>%
+  group_by(percent_syn) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=percent_syn, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+```{r}
+track1 %>%
+  group_by(Temperature) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=Temperature, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+```{r}
+track1 %>%
+  group_by(percent_lateral) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=percent_lateral, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+```{r}
+track1 %>%
+  group_by(percent_wet) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=percent_wet, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+```{r}
+track1 %>%
+  group_by(zigzag_prop) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=zigzag_prop, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+```{r}
+track1 %>%
+  group_by(avg_rest) %>%
+  mutate(n=n(),
+            p.est = mean(injury),
+            emp.odds = p.est/(1-p.est),
+            emp.logit = log(emp.odds)) %>%
+  ggplot(aes(x=avg_rest, y=emp.logit)) + geom_point() + geom_smooth(method="loess", se=FALSE) + geom_hline(yintercept=0,color="red")
+```
+
+
+```{r}
+mod1 <- glm(injury ~ percent_syn + percent_wet + percent_lateral + Temperature + zigzag_prop + avg_rest, family = binomial, data = track)
+summary(mod1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

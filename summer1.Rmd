@@ -1,0 +1,158 @@
+---
+title: "summer1"
+author: "Brenden Bready"
+date: "6/3/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(stringr)
+library(tidyr)
+```
+
+```{r}
+playlist <- read_csv("data/PlayList.csv")
+injury <- read_csv("data/InjuryRecord.csv") 
+```
+
+
+```{r}
+injury <- injury %>%
+  mutate(Days_Missed = ifelse(DM_M42 == "1", "42+", ifelse(DM_M28 == "1", "28-41", ifelse(DM_M7 == "1", "7-27", ifelse(DM_M1 == "1", "1-6", "<1"))))) %>%
+  select(PlayerKey, GameID, PlayKey, BodyPart, Surface, Days_Missed)
+```
+
+```{r}
+when_injured <- right_join(playlist, injury, by = c("PlayKey", "GameID", "PlayerKey"))
+```
+
+
+```{r}
+injury %>%
+  summarise(prop_injuries_on_synthetic = mean(Surface == "Synthetic"))
+```
+
+```{r}
+playlist %>%
+  distinct(., GameID, .keep_all = TRUE) %>%
+  summarise(prop_games_on_synthetic = mean(FieldType == "Synthetic"))
+```
+
+```{r}
+playlist %>%
+  group_by(FieldType) %>%
+  distinct(., GameID, .keep_all = TRUE) %>%
+  summarise(n())
+```
+
+
+
+```{r}
+playlist %>%
+  distinct(., GameID, .keep_all = TRUE) %>%
+  ggplot(., aes(x = FieldType)) + 
+  geom_histogram(aes(fill = FieldType), stat = "count") +
+  theme_bw() +
+  labs(x = "Playing Surface", y = "Number of Games Played", title = "Number of Games played on each surface" )
+```
+
+```{r}
+injury %>%
+  group_by(Surface) %>%
+  summarise(n())
+```
+
+
+```{r}
+injury %>%
+  ggplot(., aes(x = Surface)) + 
+  geom_histogram(aes(fill = Surface), stat = "count") +
+  theme_bw() +
+  labs(x = "Playing Surface", y = "Number of Injuries", title = "Number of Injuries on Each Surface" )
+```
+
+```{r}
+injury %>%
+  mutate(BodyPart = as.factor(BodyPart)) %>%
+  mutate(BodyPart = fct_relevel(BodyPart, c("Knee", "Ankle", "Foot", "Toes","Heel"))) %>%
+  ggplot(., aes(x = BodyPart)) + 
+  geom_histogram(aes(fill = BodyPart), stat = "count") +
+  theme_bw() +
+  labs(x = "Body Part", y = "Number of Injuries", title = "Number of Injuries by Body Part" )
+```
+
+```{r}
+injury %>%
+  group_by(BodyPart) %>%
+  count(Days_Missed)
+```
+
+```{r}
+injury %>%
+  ggplot(., aes(x = BodyPart, fill = Surface)) +
+  geom_bar(position = "fill") +
+  theme_bw() + 
+  labs(x = "Body Part",y = "", title = "Proportion of Injuries per Body Part by Surface")
+```
+
+
+```{r}
+injury %>%
+  ggplot(., aes(x = BodyPart, fill = Days_Missed)) +
+  geom_bar(position = "fill") +
+  theme_bw() + 
+  labs(x = "Body Part", y = "", title = "Number of Injuries by Body Part and Severity")
+```
+
+
+
+```{r}
+when_injured %>%
+  filter(., !is.na(RosterPosition)) %>%
+  ggplot(., aes(x = reorder(RosterPosition, RosterPosition, function(x)-length(x)), fill = RosterPosition)) +
+  geom_bar() + 
+  theme_bw() +
+  labs(x = "Roster Position", y = "Number of Injuries", title = "Number of Injuries by Roster Position") +
+  coord_flip() 
+```
+
+```{r}
+when_injured %>%
+  filter(., !is.na(RosterPosition)) %>%
+  ggplot(., aes(x = reorder(RosterPosition, RosterPosition, function(x)-length(x)), fill = BodyPart)) +
+  geom_bar(position = "fill") + 
+  theme_bw() +
+  labs(x = "Roster Position", y = "Proportion of Injuries", title = "Proportion of Injuries by Roster Position and Type of Injury") +
+  coord_flip() 
+```
+
+
+
+
+
+```{r}
+playlist <- playlist %>%
+  mutate(., StadiumType = str_replace_all(StadiumType, "(Oudoor)|(Outdoors)|Open|Ourdoor|Outdor|Outside|Cloudy|Outddors|Heinz Field", "Outdoor"), StadiumType = str_replace_all(StadiumType, "Indoors|Closed Dome|Dome|Bowl", "Indoor"), StadiumType = str_replace_all(StadiumType, "Retr. Roof-Closed|Outdoor Retr Roof-Outdoor|Retractable Roof|Retr. Roof - Closed|Retr. Roof-Outdoor|Indoor, Outdoor Roof|Indoord, open|Retr. Roof - Outdoor|Retr. Roof Closed|Indoord, Outdoor|Indoor, closed|Indoor, Roof Closed|Indoord, closed|Indoord", "Retractable")) %>%
+  distinct(StadiumType)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
